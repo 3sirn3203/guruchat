@@ -112,6 +112,7 @@ POST /api/sessions/{session_id}/chat
 class PostChatRequest(BaseModel):
     content: str = Field(..., description="The content of the message.")
     style: str = Field(..., description="The style of the message.")    # 'spicy' or 'cold'
+    model: str = Field(default="qwen3-235b-a22b-thinking-2507", description="The AI model to use for generating responses.")
 
 
 """
