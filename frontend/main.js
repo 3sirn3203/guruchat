@@ -335,7 +335,7 @@ const CarouselPage = ({ onGetStarted, selectedNames, onToggle }) =>
         ),
         React.createElement(
           "p",
-          null,
+          {style: { whiteSpace: "pre-line" } },
           "Start chatting with masters now. Stop guessing. \n Let the masters debate."
         )
       ),
