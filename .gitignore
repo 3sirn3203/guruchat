@@ -1,0 +1,10 @@
+# general
+*.env
+.DS_Store
+
+# backend
+*__pycache__/
+*.pyc
+*.venv
+*venv/
+*.db
