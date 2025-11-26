@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import './App.css';
 
+import { sdk } from '@farcaster/miniapp-sdk';
+
 const gurus = [
   { name: 'Elon Musk' },
   { name: 'Nakamoto' },
@@ -360,6 +362,10 @@ const ChatPage = ({ onBack }) => {
 };
 
 const App = () => {
+    useEffect(() => {
+        sdk.actions.ready();
+    }, []);
+
   const [selectedNames, setSelectedNames] = useState(() => new Set());
   const [view, setView] = useState('welcome');
 
