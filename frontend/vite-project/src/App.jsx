@@ -263,7 +263,7 @@ const CarouselPage = ({ gurus, onGetStarted, selectedNames, onToggle }) => (
   </main>
 );
 
-const ChatPage = ({ onBack }) => {
+const ChatPage = ({ onBack, sessionId, userId, selectedCharacters }) => {
   const [mode, setMode] = useState('normal');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
@@ -275,7 +275,21 @@ const ChatPage = ({ onBack }) => {
       yesterday: withIds('yesterday', historySeed.yesterday),
     };
   });
-  const [messages, setMessages] = useState(initialMessages);
+  
+  // 초기 메시지: 선택된 캐릭터들의 설명을 표시
+  const [messages, setMessages] = useState(() => {
+    if (!selectedCharacters || selectedCharacters.length === 0) {
+      return initialMessages;
+    }
+    
+    return selectedCharacters.map((char, idx) => ({
+      id: `intro-${idx}`,
+      author: char.name,
+      role: 'opponent',
+      text: char.description || `Hello, I'm ${char.name}. Ask me anything!`
+    }));
+  });
+  
   const [input, setInput] = useState('');
   const feedRef = useRef(null);
 
@@ -443,15 +457,63 @@ const App = () => {
     });
   }, []);
 
+  const handleGetStarted = useCallback(async () => {
+    // 캐릭터 선택 확인
+    if (selectedNames.size === 0) {
+      alert('최소 1명의 Guru를 선택해주세요!');
+      return;
+    }
+
+    if (!userId) {
+      alert('User ID를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    try {
+      // 세션 생성 API 호출
+      const response = await fetch(`${API_BASE_URL}/api/sessions/`, {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          character_ids: Array.from(selectedNames)
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create session');
+      }
+
+      const data = await response.json();
+      console.log('✅ Session created:', data);
+      
+      setSessionId(data.id);
+      setView('chat');
+    } catch (error) {
+      console.error('❌ Error creating session:', error);
+      alert('세션 생성에 실패했습니다. 다시 시도해주세요.');
+    }
+  }, [selectedNames, userId]);
+
   if (view === 'chat') {
+    const selectedCharacters = gurus.filter(guru => selectedNames.has(guru.id));
+    
     return (
       <main className="phone">
-        <ChatPage onBack={() => setView('welcome')} />
+        <ChatPage 
+          onBack={() => setView('welcome')} 
+          sessionId={sessionId}
+          userId={userId}
+          selectedCharacters={selectedCharacters}
+        />
       </main>
     );
   }
 
-  return <CarouselPage gurus={gurus} onGetStarted={() => setView('chat')} selectedNames={selectedNames} onToggle={handleToggle} />;
+  return <CarouselPage gurus={gurus} onGetStarted={handleGetStarted} selectedNames={selectedNames} onToggle={handleToggle} />;
 };
 
 export default App;
