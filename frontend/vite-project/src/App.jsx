@@ -19,11 +19,6 @@ const getUserId = () => {
 
 // gurus는 이제 App 컴포넌트 state로 관리됨
 
-const initialMessages = [
-  { id: 'm1', author: 'Nakamoto', role: 'opponent', text: 'Trust no one. Verify the code.' },
-  { id: 'm2', author: 'Nakamoto', role: 'opponent', text: 'What are you trying to figure out today?' },
-];
-
 const historySeed = {
   today: ['How Much Pushups A day', 'Top 10 Imdb Best Movies ever', 'Tell me what support i played daily fitness'],
   yesterday: [
@@ -350,14 +345,11 @@ const ChatPage = ({ onBack, sessionId, userId, selectedCharacters }) => {
   const [mode, setMode] = useState('normal');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
-  const [historyItems, setHistoryItems] = useState(() => {
-    let counter = 0;
-    const withIds = (day, list) => list.map((title) => ({ id: `${day}-${counter++}`, day, title }));
-    return {
-      today: withIds('today', historySeed.today),
-      yesterday: withIds('yesterday', historySeed.yesterday),
-    };
+  const [historyItems, setHistoryItems] = useState({
+    today: [],
+    yesterday: [],
   });
+  const [loadingSessions, setLoadingSessions] = useState(false);
   
   // 초기 메시지: 선택된 캐릭터들의 설명을 표시
   const [messages, setMessages] = useState(() => {
@@ -386,25 +378,131 @@ const ChatPage = ({ onBack, sessionId, userId, selectedCharacters }) => {
     setMode((prev) => (prev === 'normal' ? 'spicy' : 'normal'));
   }, []);
 
-  const handleDeleteHistory = useCallback((id) => {
-    setHistoryItems((prev) => {
-      const filterDay = (arr) => arr.filter((item) => item.id !== id);
-      return {
-        today: filterDay(prev.today),
-        yesterday: filterDay(prev.yesterday),
-      };
-    });
-  }, []);
+  const fetchSessions = useCallback(async () => {
+    if (!userId) return;
+    
+    setLoadingSessions(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sessions/`, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'X-User-ID': userId
+        }
+      });
 
-  const handleRenameHistory = useCallback((id, title) => {
-    setHistoryItems((prev) => {
-      const rename = (arr) => arr.map((item) => (item.id === id ? { ...item, title } : item));
-      return {
-        today: rename(prev.today),
-        yesterday: rename(prev.yesterday),
-      };
-    });
-  }, []);
+      if (!response.ok) {
+        throw new Error('Failed to fetch sessions');
+      }
+
+      const sessions = await response.json();
+      console.log('📚 Sessions loaded:', sessions);
+
+      // 세션들을 날짜별로 분류
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const yesterdayStart = new Date(todayStart);
+      yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+      const todaySessions = [];
+      const yesterdaySessions = [];
+
+      sessions.forEach((session) => {
+        const sessionDate = new Date(session.created_at);
+        const sessionItem = {
+          id: session.id,
+          title: session.title,
+          created_at: session.created_at,
+          characters: session.characters
+        };
+
+        if (sessionDate >= todayStart) {
+          todaySessions.push(sessionItem);
+        } else if (sessionDate >= yesterdayStart) {
+          yesterdaySessions.push(sessionItem);
+        }
+        // 더 오래된 세션은 일단 무시 (필요시 "Earlier" 그룹 추가 가능)
+      });
+
+      setHistoryItems({
+        today: todaySessions,
+        yesterday: yesterdaySessions,
+      });
+    } catch (error) {
+      console.error('❌ Error fetching sessions:', error);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }, [userId]);
+
+  // 히스토리 오버레이가 열릴 때 세션 데이터 가져오기
+  useEffect(() => {
+    if (historyOpen) {
+      fetchSessions();
+    }
+  }, [historyOpen, fetchSessions]);
+
+  const handleDeleteHistory = useCallback(async (id) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sessions/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'accept': 'application/json',
+          'X-User-ID': userId
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete session');
+      }
+
+      console.log('✅ Session deleted:', id);
+
+      // UI에서 삭제
+      setHistoryItems((prev) => {
+        const filterDay = (arr) => arr.filter((item) => item.id !== id);
+        return {
+          today: filterDay(prev.today),
+          yesterday: filterDay(prev.yesterday),
+        };
+      });
+    } catch (error) {
+      console.error('❌ Error deleting session:', error);
+      alert('세션 삭제에 실패했습니다.');
+    }
+  }, [userId]);
+
+  const handleRenameHistory = useCallback(async (id, title) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sessions/${id}/title`, {
+        method: 'PATCH',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-User-ID': userId
+        },
+        body: JSON.stringify({ title })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update session title');
+      }
+
+      console.log('✅ Session title updated:', id, title);
+
+      // UI에서 업데이트
+      setHistoryItems((prev) => {
+        const rename = (arr) => arr.map((item) => (item.id === id ? { ...item, title } : item));
+        return {
+          today: rename(prev.today),
+          yesterday: rename(prev.yesterday),
+        };
+      });
+    } catch (error) {
+      console.error('❌ Error updating session title:', error);
+      alert('세션 제목 변경에 실패했습니다.');
+    }
+  }, [userId]);
 
   const scrollToBottom = () => {
     const el = feedRef.current;
