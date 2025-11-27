@@ -476,6 +476,13 @@ const App = () => {
     }
 
     try {
+      const requestBody = {
+        user_id: userId,
+        character_ids: Array.from(selectedNames)
+      };
+      
+      console.log('📤 세션 생성 요청:', requestBody);
+
       // 세션 생성 API 호출
       const response = await fetch(`${API_BASE_URL}/api/sessions/`, {
         method: 'POST',
@@ -483,14 +490,13 @@ const App = () => {
           'accept': 'application/json',
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          user_id: userId,
-          character_ids: Array.from(selectedNames)
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create session');
+        const errorData = await response.json();
+        console.error('❌ API 응답 에러:', errorData);
+        throw new Error(`Failed to create session: ${JSON.stringify(errorData)}`);
       }
 
       const data = await response.json();
@@ -500,7 +506,7 @@ const App = () => {
       setView('chat');
     } catch (error) {
       console.error('❌ Error creating session:', error);
-      alert('세션 생성에 실패했습니다. 다시 시도해주세요.');
+      alert('세션 생성에 실패했습니다. 콘솔을 확인해주세요.');
     }
   }, [selectedNames, userId]);
 
