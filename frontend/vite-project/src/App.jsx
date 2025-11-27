@@ -3,15 +3,21 @@ import './App.css';
 
 import { sdk } from '@farcaster/miniapp-sdk';
 
-const gurus = [
-  { name: 'Elon Musk' },
-  { name: 'Nakamoto' },
-  { name: 'Buffett' },
-  { name: 'Ralo' },
-  { name: 'Socrates' },
-  { name: 'Hypatia' },
-  { name: 'Keller' },
-];
+// API Base URL
+const API_BASE_URL = 'https://guruchat-backend.onrender.com';
+
+// User ID 관리 유틸리티
+const getUserId = () => {
+  let userId = localStorage.getItem('guruchat_user_id');
+  if (!userId) {
+    // UUID v4 생성 (표준 형식)
+    userId = crypto.randomUUID();
+    localStorage.setItem('guruchat_user_id', userId);
+  }
+  return userId;
+};
+
+// gurus는 이제 App 컴포넌트 state로 관리됨
 
 const initialMessages = [
   { id: 'm1', author: 'Nakamoto', role: 'opponent', text: 'Trust no one. Verify the code.' },
@@ -54,18 +60,29 @@ const Person = ({ name, active, onToggle }) => (
   </div>
 );
 
-const Carousel = ({ selectedNames, onToggle }) => {
-  const items = useMemo(() => gurus, []);
+const Carousel = ({ gurus, selectedNames, onToggle }) => {
+  if (!gurus || gurus.length === 0) {
+    return (
+      <section className="carousel-shell" aria-label="Masters carousel">
+        <div className="carousel-window">
+          <div className="carousel-track" role="list">
+            <p>Loading characters...</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+  
   return (
     <section className="carousel-shell" aria-label="Masters carousel">
       <div className="carousel-window">
         <div className="carousel-track" role="list">
-          {items.map((person, idx) => (
+          {gurus.map((person, idx) => (
             <Person
-              key={`${person.name}-${idx}`}
-              {...person}
-              active={selectedNames.has(person.name)}
-              onToggle={onToggle}
+              key={person.id || `${person.name}-${idx}`}
+              name={person.name}
+              active={selectedNames.has(person.id || person.name)}
+              onToggle={() => onToggle(person.id || person.name)}
             />
           ))}
         </div>
@@ -307,7 +324,7 @@ const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete, onRename }) => (
   </div>
 );
 
-const CarouselPage = ({ onGetStarted, selectedNames, onToggle }) => (
+const CarouselPage = ({ gurus, onGetStarted, selectedNames, onToggle }) => (
   <main className="phone welcome-page">
     <button className="back-btn" aria-label="Go back" type="button">
       <BackIcon />
@@ -320,7 +337,7 @@ const CarouselPage = ({ onGetStarted, selectedNames, onToggle }) => (
         </h1>
         <p style={{ whiteSpace: 'pre-line' }}>Start chatting with masters now. Stop guessing. {'\n'} Let the masters debate.</p>
       </section>
-      <Carousel selectedNames={selectedNames} onToggle={onToggle} />
+      <Carousel gurus={gurus} selectedNames={selectedNames} onToggle={onToggle} />
       <p className="footer-hint">Swipe or tap to pick your guru</p>
     </div>
     <button className="cta" type="button" onClick={onGetStarted}>
@@ -329,7 +346,7 @@ const CarouselPage = ({ onGetStarted, selectedNames, onToggle }) => (
   </main>
 );
 
-const ChatPage = ({ onBack }) => {
+const ChatPage = ({ onBack, sessionId, userId, selectedCharacters }) => {
   const [mode, setMode] = useState('normal');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
@@ -341,7 +358,27 @@ const ChatPage = ({ onBack }) => {
       yesterday: withIds('yesterday', historySeed.yesterday),
     };
   });
-  const [messages, setMessages] = useState(initialMessages);
+  
+  // 초기 메시지: 선택된 캐릭터들의 설명을 표시
+  const [messages, setMessages] = useState(() => {
+    if (!selectedCharacters || selectedCharacters.length === 0) {
+      return [{
+        id: 'm1',
+        author: 'System',
+        role: 'opponent',
+        text: 'Please select a Guru to start chatting.'
+      }];
+    }
+    
+    // 각 캐릭터의 설명을 메시지로 추가
+    return selectedCharacters.map((char, idx) => ({
+      id: `intro-${char.id || idx}`,
+      author: char.name,
+      role: 'opponent',
+      text: char.description || `Hello, I'm ${char.name}. Ask me anything!`
+    }));
+  });
+  
   const [input, setInput] = useState('');
   const feedRef = useRef(null);
 
@@ -376,25 +413,105 @@ const ChatPage = ({ onBack }) => {
 
   useEffect(scrollToBottom, [messages]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback(async () => {
     if (isComposing) return;
     const text = input.trim();
     if (!text) return;
+    
     const userMsg = { id: `u-${Date.now()}`, role: 'user', text };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
-    setTimeout(() => {
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sessions/chat/${sessionId}/chat`, {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-User-ID': userId
+        },
+        body: JSON.stringify({
+          content: text,
+          style: mode, // 'spicy' or 'normal'
+          model: 'qwen-plus'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to send message');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      // 각 캐릭터별 메시지 버퍼
+      const characterBuffers = {};
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonStr = line.slice(6); // 'data: ' 제거
+              const data = JSON.parse(jsonStr);
+              
+              if (data.character_id && data.name && data.content) {
+                const charId = data.character_id;
+                
+                // 스페이스만 있는 경우 메시지 종료 신호
+                if (data.content === ' ') {
+                  continue;
+                }
+
+                // 버퍼 초기화 또는 업데이트
+                if (!characterBuffers[charId]) {
+                  const msgId = `${charId}-${Date.now()}`;
+                  characterBuffers[charId] = {
+                    id: msgId,
+                    author: data.name,
+                    role: 'opponent',
+                    text: data.content
+                  };
+                  
+                  // 새 메시지 추가
+                  setMessages((prev) => [...prev, characterBuffers[charId]]);
+                } else {
+                  // 기존 메시지 업데이트
+                  characterBuffers[charId].text += data.content;
+                  
+                  setMessages((prev) => 
+                    prev.map(msg => 
+                      msg.id === characterBuffers[charId].id 
+                        ? { ...msg, text: characterBuffers[charId].text }
+                        : msg
+                    )
+                  );
+                }
+              }
+            } catch (e) {
+              console.error('Failed to parse SSE data:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error sending message:', error);
       setMessages((prev) => [
         ...prev,
         {
-          id: `o-${Date.now()}`,
+          id: `error-${Date.now()}`,
           role: 'opponent',
-          author: 'Nakamoto',
-          text: mode === 'spicy' ? 'Bold take incoming. Ready?' : 'Let me think that through with you.',
+          author: 'System',
+          text: '메시지 전송에 실패했습니다. 다시 시도해주세요.',
         },
       ]);
-    }, 600);
-  }, [input, mode, isComposing]);
+    }
+  }, [input, mode, isComposing, sessionId, userId]);
 
   return (
     <div className="chat-page">
@@ -463,34 +580,126 @@ const ChatPage = ({ onBack }) => {
 };
 
 const App = () => {
-    useEffect(() => {
-        sdk.actions.ready();
-    }, []);
-
+  const [userId, setUserId] = useState(null);
+  const [gurus, setGurus] = useState([]);
   const [selectedNames, setSelectedNames] = useState(() => new Set());
   const [view, setView] = useState('welcome');
+  const [sessionId, setSessionId] = useState(null);
+
+  useEffect(() => {
+    sdk.actions.ready();
+    // User ID 초기화
+    const id = getUserId();
+    setUserId(id);
+    console.log('🔑 User ID:', id);
+
+    // 캐릭터 목록 가져오기
+    const fetchCharacters = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/characters/`, {
+          method: 'GET',
+          headers: {
+            'accept': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch characters');
+        }
+        
+        const data = await response.json();
+        console.log('📚 Characters loaded:', data);
+        setGurus(data);
+      } catch (error) {
+        console.error('❌ Error fetching characters:', error);
+        // 폴백으로 빈 배열 유지
+      }
+    };
+
+    fetchCharacters();
+  }, []);
 
   const handleToggle = useCallback((name) => {
     setSelectedNames((prev) => {
       const next = new Set(prev);
       if (next.has(name)) {
+        // 이미 선택된 경우 선택 해제
         next.delete(name);
       } else {
+        // 최대 3명까지만 선택 가능
+        if (next.size >= 3) {
+          alert('최대 3명의 Guru만 선택할 수 있습니다!');
+          return prev;
+        }
         next.add(name);
       }
       return next;
     });
   }, []);
 
+  const handleGetStarted = useCallback(async () => {
+    // 캐릭터 선택 확인
+    if (selectedNames.size === 0) {
+      alert('최소 1명의 Guru를 선택해주세요!');
+      return;
+    }
+
+    if (!userId) {
+      alert('User ID를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
+    try {
+      const requestBody = {
+        user_id: userId,
+        character_ids: Array.from(selectedNames)
+      };
+      
+      console.log('📤 세션 생성 요청:', requestBody);
+
+      // 세션 생성 API 호출
+      const response = await fetch(`${API_BASE_URL}/api/sessions/`, {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ API 응답 에러:', errorData);
+        throw new Error(`Failed to create session: ${JSON.stringify(errorData)}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Session created:', data);
+      
+      setSessionId(data.id);
+      setView('chat');
+    } catch (error) {
+      console.error('❌ Error creating session:', error);
+      alert('세션 생성에 실패했습니다. 콘솔을 확인해주세요.');
+    }
+  }, [selectedNames, userId]);
+
   if (view === 'chat') {
+    const selectedCharacters = gurus.filter(guru => selectedNames.has(guru.id));
+    
     return (
       <main className="phone">
-        <ChatPage onBack={() => setView('welcome')} />
+        <ChatPage 
+          onBack={() => setView('welcome')} 
+          sessionId={sessionId}
+          userId={userId}
+          selectedCharacters={selectedCharacters}
+        />
       </main>
     );
   }
 
-  return <CarouselPage onGetStarted={() => setView('chat')} selectedNames={selectedNames} onToggle={handleToggle} />;
+  return <CarouselPage gurus={gurus} onGetStarted={handleGetStarted} selectedNames={selectedNames} onToggle={handleToggle} />;
 };
 
 export default App;
