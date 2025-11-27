@@ -35,23 +35,6 @@ const BackIcon = () => (
   </svg>
 );
 
-const Logo = () => (
-  <svg className="logo" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <path
-      d="M54.5 12c4-7 14-7 18 0l7.5 12.8c4 6.8.5 15.5-7 17.7l-14 4.3c-7.5 2.3-15-4.3-13.4-12L49 24l5.5-12z"
-      fill="#0f0f0f"
-    />
-    <path
-      d="M17.5 63c-7.8-3-10.2-13-4.5-19.5l9.9-11c5.6-6.2 15.6-5 19.6 2.4l7.4 14.1c4 7.4-1 16.3-9.4 17.2L24 67.9 17.5 63z"
-      fill="#0f0f0f"
-    />
-    <path
-      d="M68.7 105c-3.9 7-14 7-18 0l-7.5-13c-4-7-.3-15.8 7.4-17.8l14.1-3.7c7.7-2 15 4.8 13.1 12.6l-3.8 15-5.3 6.9z"
-      fill="#0f0f0f"
-    />
-  </svg>
-);
-
 const Person = ({ name, active, onToggle }) => (
   <div
     className={`person${active ? ' active' : ''}`}
@@ -139,29 +122,76 @@ const DeleteIcon = () => (
   </svg>
 );
 
-const HistoryItem = ({ title, onDelete }) => {
+const PencilIcon = () => (
+  <svg width={19} height={19} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <path d="M4 17.5l1.5 1.5L15 9.5 13.5 8z" stroke="#c4cedf" strokeWidth="1.7" strokeLinecap="round" />
+    <path d="M14.5 7L17 4.5a1.5 1.5 0 012 0l1.5 1.5a1.5 1.5 0 010 2L17 10" stroke="#c4cedf" strokeWidth="1.7" />
+    <path d="M4 17.5L3 21l3.5-1" stroke="#c4cedf" strokeWidth="1.7" strokeLinecap="round" />
+  </svg>
+);
+
+const HistoryItem = ({ title, onDelete, onSelect, onRename }) => {
   const [offset, setOffset] = useState(0);
   const [ready, setReady] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const inputRef = useRef(null);
   const startRef = useRef(0);
   const draggingRef = useRef(false);
 
   const handleStart = (clientX) => {
+    if (editing) return;
     draggingRef.current = true;
     startRef.current = clientX;
+    setPressed(true);
   };
 
   const handleMove = (clientX) => {
+    if (editing) return;
     if (!draggingRef.current) return;
     const delta = Math.max(0, clientX - startRef.current);
+    if (delta > 4 && pressed) setPressed(false);
     setOffset(Math.min(delta, 90));
   };
 
   const handleEnd = () => {
+    if (editing) return;
     if (!draggingRef.current) return;
     draggingRef.current = false;
     const nextReady = offset > 50;
     setReady(nextReady);
     setOffset(nextReady ? 70 : 0);
+    setPressed(false);
+  };
+
+  const handleClick = () => {
+    if (editing) return;
+    if (offset > 6 || ready) return;
+    if (onSelect) onSelect();
+    setPressed(false);
+  };
+
+  const handleEditClick = (e) => {
+    e.stopPropagation();
+    setEditing(true);
+    setDraft(title);
+    setPressed(false);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
+  const commitDraft = () => {
+    const nextTitle = draft.trim();
+    if (nextTitle && nextTitle !== title && onRename) {
+      onRename(nextTitle);
+    }
+    setEditing(false);
+    setDraft(nextTitle || title);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setDraft(title);
   };
 
   return (
@@ -183,30 +213,71 @@ const HistoryItem = ({ title, onDelete }) => {
           <DeleteIcon />
         </button>
       </div>
-      <div className={`history-item${ready ? ' ready' : ''}`} style={{ transform: `translateX(${offset}px)` }}>
-        {title}
+      <div
+        className={`history-item${ready ? ' ready' : ''}${pressed ? ' pressed' : ''}`}
+        style={{ transform: `translateX(${offset}px)` }}
+        onClick={handleClick}
+      >
+        <div className="history-item-content">
+          {editing ? (
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={commitDraft}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  commitDraft();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelEdit();
+                }
+              }}
+              className="history-edit-input"
+              aria-label={`Edit ${title}`}
+            />
+          ) : (
+            <span className="history-title-text">{title}</span>
+          )}
+          <button type="button" className="edit-btn" onClick={handleEditClick} aria-label={`Edit ${title}`}>
+            <PencilIcon />
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
-const HistoryGroup = ({ label, items, onDelete }) => (
+const HistoryGroup = ({ label, items, onDelete, onSelect, onRename }) => (
   <div className="history-group">
     <h4>{label}</h4>
     {items.map((item) => (
-      <HistoryItem key={item.id} title={item.title} onDelete={() => onDelete(item.id)} />
+      <HistoryItem
+        key={item.id}
+        title={item.title}
+        onDelete={() => onDelete(item.id)}
+        onSelect={onSelect}
+        onRename={(next) => onRename(item.id, next)}
+      />
     ))}
   </div>
 );
 
-const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete }) => (
+const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete, onRename }) => (
   <div className={`history-overlay${open ? ' open' : ''}`}>
     <div className="history-header">
       <h3 className="history-title">History</h3>
       <button className="post-btn" type="button" onClick={onClose} aria-label="Back to chat">
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M7 17l10-10" stroke="#f4f7ff" strokeWidth="2" strokeLinecap="round" />
-          <path d="M9.5 7H17v7.5" stroke="#f4f7ff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <svg width={24} height={24} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M7 17l10-10" stroke="#f4f7ff" strokeWidth="2.4" strokeLinecap="round" />
+          <path
+            d="M9.5 7H17v7.5"
+            stroke="#f4f7ff"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
     </div>
@@ -218,8 +289,20 @@ const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete }) => (
         </svg>
         <input type="search" placeholder="Search..." aria-label="Search history" />
       </label>
-      <HistoryGroup label="Today" items={itemsByDay.today} onDelete={onDelete} />
-      <HistoryGroup label="Yesterday" items={itemsByDay.yesterday} onDelete={onDelete} />
+      <HistoryGroup
+        label="Today"
+        items={itemsByDay.today}
+        onDelete={onDelete}
+        onSelect={onClose}
+        onRename={onRename}
+      />
+      <HistoryGroup
+        label="Yesterday"
+        items={itemsByDay.yesterday}
+        onDelete={onDelete}
+        onSelect={onClose}
+        onRename={onRename}
+      />
     </div>
   </div>
 );
@@ -272,6 +355,16 @@ const ChatPage = ({ onBack }) => {
       return {
         today: filterDay(prev.today),
         yesterday: filterDay(prev.yesterday),
+      };
+    });
+  }, []);
+
+  const handleRenameHistory = useCallback((id, title) => {
+    setHistoryItems((prev) => {
+      const rename = (arr) => arr.map((item) => (item.id === id ? { ...item, title } : item));
+      return {
+        today: rename(prev.today),
+        yesterday: rename(prev.yesterday),
       };
     });
   }, []);
@@ -363,6 +456,7 @@ const ChatPage = ({ onBack }) => {
         onClose={() => setHistoryOpen(false)}
         itemsByDay={historyItems}
         onDelete={handleDeleteHistory}
+        onRename={handleRenameHistory}
       />
     </div>
   );

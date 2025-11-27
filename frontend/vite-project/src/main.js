@@ -173,29 +173,94 @@ const DeleteIcon = () =>
     })
   );
 
-const HistoryItem = ({ title, onDelete }) => {
+const PencilIcon = () =>
+  React.createElement(
+    "svg",
+    { width: 19, height: 19, viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
+    React.createElement("path", {
+      d: "M4 17.5l1.5 1.5L15 9.5 13.5 8z",
+      stroke: "#c4cedf",
+      "stroke-width": "1.7",
+      "stroke-linecap": "round"
+    }),
+    React.createElement("path", {
+      d: "M14.5 7L17 4.5a1.5 1.5 0 012 0l1.5 1.5a1.5 1.5 0 010 2L17 10",
+      stroke: "#c4cedf",
+      "stroke-width": "1.7"
+    }),
+    React.createElement("path", {
+      d: "M4 17.5L3 21l3.5-1",
+      stroke: "#c4cedf",
+      "stroke-width": "1.7",
+      "stroke-linecap": "round"
+    })
+  );
+
+const HistoryItem = ({ title, onDelete, onSelect, onRename }) => {
   const [offset, setOffset] = useState(0);
   const [ready, setReady] = useState(false);
+  const [pressed, setPressed] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const inputRef = useRef(null);
   const startRef = useRef(0);
   const draggingRef = useRef(false);
 
   const handleStart = (clientX) => {
+    if (editing) return;
     draggingRef.current = true;
     startRef.current = clientX;
+    setPressed(true);
   };
 
   const handleMove = (clientX) => {
+    if (editing) return;
     if (!draggingRef.current) return;
     const delta = Math.max(0, clientX - startRef.current);
+    if (delta > 4 && pressed) setPressed(false);
     setOffset(Math.min(delta, 90));
   };
 
   const handleEnd = () => {
+    if (editing) return;
     if (!draggingRef.current) return;
     draggingRef.current = false;
     const nextReady = offset > 50;
     setReady(nextReady);
     setOffset(nextReady ? 70 : 0);
+    setPressed(false);
+  };
+
+  const handleClick = () => {
+    if (editing) return;
+    if (offset > 6 || ready) return;
+    if (onSelect) onSelect();
+    setPressed(false);
+  };
+
+  const handleEditClick = (e) => {
+    e.stopPropagation();
+    setEditing(true);
+    setDraft(title);
+    setPressed(false);
+    setTimeout(() => {
+      var _a;
+      return (_a = inputRef.current) === null || _a === void 0 ? void 0 : _a.focus();
+    }, 0);
+  };
+
+  const commitDraft = () => {
+    const nextTitle = draft.trim();
+    if (nextTitle && nextTitle !== title && onRename) {
+      onRename(nextTitle);
+    }
+    setEditing(false);
+    setDraft(nextTitle || title);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setDraft(title);
   };
 
   return React.createElement(
@@ -224,13 +289,49 @@ const HistoryItem = ({ title, onDelete }) => {
     ),
     React.createElement(
       "div",
-      { className: `history-item${ready ? " ready" : ""}`, style: { transform: `translateX(${offset}px)` } },
-      title
+      {
+        className: `history-item${ready ? " ready" : ""}${pressed ? " pressed" : ""}`,
+        style: { transform: `translateX(${offset}px)` },
+        onClick: handleClick
+      },
+      React.createElement(
+        "div",
+        { className: "history-item-content" },
+        editing
+          ? React.createElement("input", {
+              ref: inputRef,
+              value: draft,
+              onChange: (e) => setDraft(e.target.value),
+              onBlur: commitDraft,
+              onKeyDown: (e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitDraft();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  cancelEdit();
+                }
+              },
+              className: "history-edit-input",
+              "aria-label": `Edit ${title}`
+            })
+          : React.createElement("span", { className: "history-title-text" }, title),
+        React.createElement(
+          "button",
+          {
+            type: "button",
+            className: "edit-btn",
+            onClick: handleEditClick,
+            "aria-label": `Edit ${title}`
+          },
+          React.createElement(PencilIcon)
+        )
+      )
     )
   );
 };
 
-const HistoryGroup = ({ label, items, onDelete }) =>
+const HistoryGroup = ({ label, items, onDelete, onSelect, onRename }) =>
   React.createElement(
     "div",
     { className: "history-group" },
@@ -239,12 +340,14 @@ const HistoryGroup = ({ label, items, onDelete }) =>
       React.createElement(HistoryItem, {
         key: item.id,
         title: item.title,
-        onDelete: () => onDelete(item.id)
+        onDelete: () => onDelete(item.id),
+        onSelect,
+        onRename: (next) => onRename(item.id, next)
       })
     )
   );
 
-const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete }) =>
+const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete, onRename }) =>
   React.createElement(
     "div",
     { className: `history-overlay${open ? " open" : ""}` },
@@ -257,17 +360,17 @@ const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete }) =>
         { className: "post-btn", type: "button", onClick: onClose, "aria-label": "Back to chat" },
         React.createElement(
           "svg",
-          { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
+          { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
           React.createElement("path", {
             d: "M7 17l10-10",
             stroke: "#f4f7ff",
-            "stroke-width": "2",
+            "stroke-width": "2.4",
             "stroke-linecap": "round"
           }),
           React.createElement("path", {
             d: "M9.5 7H17v7.5",
             stroke: "#f4f7ff",
-            "stroke-width": "2",
+            "stroke-width": "2.4",
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
           })
@@ -302,12 +405,16 @@ const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete }) =>
       React.createElement(HistoryGroup, {
         label: "Today",
         items: itemsByDay.today,
-        onDelete: onDelete
+        onDelete: onDelete,
+        onSelect: onClose,
+        onRename: onRename
       }),
       React.createElement(HistoryGroup, {
         label: "Yesterday",
         items: itemsByDay.yesterday,
-        onDelete: onDelete
+        onDelete: onDelete,
+        onSelect: onClose,
+        onRename: onRename
       })
     )
   );
@@ -374,6 +481,16 @@ const ChatPage = ({ onBack }) => {
       return {
         today: filterDay(prev.today),
         yesterday: filterDay(prev.yesterday)
+      };
+    });
+  }, []);
+
+  const handleRenameHistory = useCallback((id, title) => {
+    setHistoryItems((prev) => {
+      const rename = (arr) => arr.map((item) => (item.id === id ? { ...item, title } : item));
+      return {
+        today: rename(prev.today),
+        yesterday: rename(prev.yesterday)
       };
     });
   }, []);
@@ -486,7 +603,8 @@ const ChatPage = ({ onBack }) => {
       open: historyOpen,
       onClose: () => setHistoryOpen(false),
       itemsByDay: historyItems,
-      onDelete: handleDeleteHistory
+      onDelete: handleDeleteHistory,
+      onRename: handleRenameHistory
     })
   );
 };

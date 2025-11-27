@@ -575,16 +575,27 @@ body::before {
 }
 
 .post-btn {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 12px;
   border: none;
   background: rgba(28, 33, 42, 0.85);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  padding: 0;
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease;
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38), var(--border-glow);
+}
+
+.post-btn svg {
+  display: block;
+  /* Force size override even if inline dimensions exist */
+  width: 24px !important;
+  height: 24px !important;
+  flex-shrink: 0;
 }
 
 .post-btn:active {
@@ -669,7 +680,7 @@ body::before {
   box-shadow:
     0 12px 30px rgba(0, 0, 0, 0.28),
     0 0 0 1px rgba(255, 255, 255, 0.04);
-  transition: transform 160ms ease;
+  transition: transform 160ms ease, box-shadow 140ms ease, background 140ms ease, filter 140ms ease;
   touch-action: pan-y;
   user-select: none;
   height: 48px;
@@ -678,10 +689,53 @@ body::before {
   text-overflow: ellipsis;
 }
 
+.history-item-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.history-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-edit-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f0f4ff;
+  font-size: 13px;
+  padding: 8px 0;
+}
+
+.edit-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  padding: 0;
+}
+
 .history-item.ready {
   box-shadow:
     0 16px 36px rgba(0, 0, 0, 0.34),
     0 0 0 1px rgba(60, 243, 216, 0.2);
+}
+
+.history-item.pressed {
+  filter: brightness(1.16);
+  background: linear-gradient(145deg, rgba(46, 55, 68, 0.95), rgba(32, 39, 48, 0.95));
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 @keyframes scroll {
