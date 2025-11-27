@@ -180,21 +180,21 @@ body::before {
 }
 
 .carousel-window {
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   position: relative;
-  mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 12%, black 88%, transparent);
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* hide scrollbar in Firefox */
+}
+
+.carousel-window::-webkit-scrollbar {
+  display: none; /* hide scrollbar in WebKit */
 }
 
 .carousel-track {
   display: flex;
   gap: 26px;
   align-items: center;
-  animation: scroll 14s linear infinite;
-}
-
-.carousel-track:hover {
-  animation-play-state: paused;
 }
 
 .person {

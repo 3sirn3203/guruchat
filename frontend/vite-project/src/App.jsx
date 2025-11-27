@@ -72,7 +72,7 @@ const Person = ({ name, active, onToggle }) => (
 );
 
 const Carousel = ({ selectedNames, onToggle }) => {
-  const items = useMemo(() => [...gurus, ...gurus], []);
+  const items = useMemo(() => gurus, []);
   return (
     <section className="carousel-shell" aria-label="Masters carousel">
       <div className="carousel-window">
