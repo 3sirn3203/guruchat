@@ -17,7 +17,7 @@ def create_session(
 
 
 # GET /api/sessions
-@router.get("/", response_model=schemas.GetSessionsResponse)
+@router.get("/", response_model=List[schemas.SessionInfo])
 def read_sessions(
     user_id: str = Header(..., alias="X-User-ID"),
     db: Session = Depends(database.get_db)

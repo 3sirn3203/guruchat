@@ -12,7 +12,7 @@ router = APIRouter(prefix="/api/sessions/chat", tags=["chat"])
 
 
 # GET /api/sessions/{session_id}/messages
-@router.get("/{session_id}/messages", response_model=schemas.GetSessionMessagesResponse)
+@router.get("/{session_id}/messages", response_model=List[schemas.MessageInfo])
 def get_messages(
     session_id: str,
     user_id: str = Header(..., alias="X-User-ID"),
@@ -85,7 +85,7 @@ async def send_message(
     crud.create_message(
         db,
         session_id=session_id,
-        content=request.message,
+        content=request.content,
         role="user"
     )
 

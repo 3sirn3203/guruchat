@@ -8,7 +8,7 @@ def get_user(db: Session, user_id: str):
     return db.query(models.User).filter(models.User.id == user_id).first()
 
 def create_user(db: Session, user_id: str):
-    db_user = models.User(id=user_id)
+    db_user = models.User(id=str(user_id))
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
@@ -19,9 +19,10 @@ def ensure_user_exists(db: Session, user_id: str):
     If user does not exist, create one.
     Else, return the existing user.
     """
-    user = get_user(db, user_id)
+    user_id_str = str(user_id)
+    user = get_user(db, user_id_str)
     if not user:
-        user = create_user(db, user_id)
+        user = create_user(db, user_id_str)
     return user
 
 
@@ -61,16 +62,18 @@ def create_session(db: Session, session: schemas.PostSessionRequest):
     """Create a new session and associate characters (N:M)."""
     
     # 1. Ensure user exists (create if not)
-    ensure_user_exists(db, session.user_id)
+    user_id_str = str(session.user_id)
+    ensure_user_exists(db, user_id_str)
 
     # 2. Retrieve actual character objects for requested character IDs
+    char_ids_str = [str(char_id) for char_id in session.character_ids]
     characters = db.query(models.Character).filter(
-        models.Character.id.in_(session.character_ids)
+        models.Character.id.in_(char_ids_str)
     ).all()
 
     # 3. Create session (SQLAlchemy automatically handles the intermediate table session_characters)
     db_session = models.Session(
-        user_id=session.user_id,
+        user_id=user_id_str,
         title="New Chat", # Initial title
         characters=characters 
     )
