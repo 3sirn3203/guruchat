@@ -3,7 +3,7 @@ import json
 import requests
 from fastapi import HTTPException
 from dotenv import load_dotenv
-from typing import Callable, Optional
+from typing import Callable, Optional, List, Dict
 
 # 1. 환경 변수 및 설정 로드
 load_dotenv()
@@ -85,7 +85,22 @@ def _parse_stream_chunk(chunk_obj):
     return ""
 
 
+def _format_conversation_history(chat_history: Optional[List[Dict[str, str]]]):
+    """Format prior conversation turns into a readable text block."""
+    if not chat_history:
+        return "No previous conversation history is available."
+
+    lines = []
+    for idx, entry in enumerate(chat_history, 1):
+        role = entry.get("role", "user")
+        speaker = entry.get("speaker") or ("User" if role == "user" else "Assistant")
+        content = entry.get("content", "")
+        lines.append(f"{idx}. {speaker} ({role}): {content}")
+    return "\n".join(lines)
+
+
 def generate_guru_response(user_query, mode, character_profile,
+                           chat_history: Optional[List[Dict[str, str]]] = None,
                            stream_callback: Optional[Callable[[str], None]] = None,
                            stream_end_callback: Optional[Callable[[], None]] = None):
     """
@@ -95,6 +110,7 @@ def generate_guru_response(user_query, mode, character_profile,
         user_query (str): 사용자 질문
         mode (str): 'hot' 또는 'cold'
         character_profile (dict): 캐릭터 설정이 담긴 JSON 객체
+        chat_history (List[Dict]): 세션의 이전 대화 기록
     
     Returns:
         str: AI의 최종 답변
@@ -144,9 +160,15 @@ def generate_guru_response(user_query, mode, character_profile,
         
 
     # 3. 메시지 구성
+    history_text = _format_conversation_history(chat_history)
+
     messages = [
         {"role": "system", "content": system_instruction},
-        {"role": "user", "content": f"News Context:\n{news_context}\n\nUser Question: {user_query}"}
+        {"role": "user", "content": (
+            f"Conversation History:\n{history_text}\n\n"
+            f"News Context:\n{news_context}\n\n"
+            f"Latest User Question: {user_query}"
+        )}
     ]
 
     # 4. Qwen API 호출

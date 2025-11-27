@@ -28,6 +28,19 @@ def get_messages(
     return crud.get_session_messages(db, session_id=session_id)
 
 
+def _build_history_payload(messages: List[models.Message]):
+    """Convert DB messages into a lightweight history payload."""
+    history = []
+    for message in messages:
+        speaker = message.character.name if message.character else "User"
+        history.append({
+            "role": message.role or ("assistant" if message.character else "user"),
+            "speaker": speaker,
+            "content": message.content or ""
+        })
+    return history
+
+
 # POST /api/sessions/{session_id}/chat
 # Make streaming response
 async def generate_chat_stream(db: Session, session_id: str,
@@ -40,6 +53,9 @@ async def generate_chat_stream(db: Session, session_id: str,
 
     loop = asyncio.get_running_loop()
     llm_mode = "hot" if isinstance(style, str) and style.lower() == "spicy" else "cold"
+
+    existing_messages = crud.get_session_messages(db, session_id=session_id)
+    conversation_history = _build_history_payload(existing_messages)
 
     for character in characters:
         persona_data = character.persona_data or {}
@@ -75,6 +91,7 @@ async def generate_chat_stream(db: Session, session_id: str,
                 user_message,
                 llm_mode,
                 character_profile,
+                chat_history=conversation_history,
                 stream_callback=enqueue_chunk,
                 stream_end_callback=finish_stream
             )
@@ -123,6 +140,12 @@ async def generate_chat_stream(db: Session, session_id: str,
             )
         except Exception as e:
             print(f"Error saving message: {e}")
+
+        conversation_history.append({
+            "role": "assistant",
+            "speaker": character.name,
+            "content": assistant_response
+        })
 
 @router.post("/{session_id}/chat")
 async def send_message(
