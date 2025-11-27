@@ -249,6 +249,7 @@ const CarouselPage = ({ onGetStarted, selectedNames, onToggle }) => (
 const ChatPage = ({ onBack }) => {
   const [mode, setMode] = useState('normal');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [isComposing, setIsComposing] = useState(false);
   const [historyItems, setHistoryItems] = useState(() => {
     let counter = 0;
     const withIds = (day, list) => list.map((title) => ({ id: `${day}-${counter++}`, day, title }));
@@ -283,6 +284,7 @@ const ChatPage = ({ onBack }) => {
   useEffect(scrollToBottom, [messages]);
 
   const handleSend = useCallback(() => {
+    if (isComposing) return;
     const text = input.trim();
     if (!text) return;
     const userMsg = { id: `u-${Date.now()}`, role: 'user', text };
@@ -299,7 +301,7 @@ const ChatPage = ({ onBack }) => {
         },
       ]);
     }, 600);
-  }, [input, mode]);
+  }, [input, mode, isComposing]);
 
   return (
     <div className="chat-page">
@@ -335,8 +337,13 @@ const ChatPage = ({ onBack }) => {
             aria-label="Send a message"
             value={input}
             onChange={(e) => setInput(e.target.value)}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={(e) => {
+              setIsComposing(false);
+              setInput(e.target.value);
+            }}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && !(e.nativeEvent?.isComposing || isComposing)) {
                 e.preventDefault();
                 handleSend();
               }
