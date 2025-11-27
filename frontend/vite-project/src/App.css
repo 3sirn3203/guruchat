@@ -84,8 +84,11 @@ body::before {
   border-radius: 14px;
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38), var(--border-glow);
   border: none;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  padding: 0;
   cursor: pointer;
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
@@ -102,6 +105,13 @@ body::before {
   margin: 0;
   width: 44px;
   height: 44px;
+}
+
+.back-btn svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .logo-area {
@@ -194,13 +204,15 @@ body::before {
 .carousel-track {
   display: flex;
   gap: 26px;
-  align-items: center;
+  align-items: flex-start;
+  min-height: 180px;
 }
 
 .person {
   display: grid;
   gap: 10px;
   justify-items: center;
+  align-items: start;
   flex: 0 0 auto;
   width: 86px;
   cursor: pointer;
@@ -214,6 +226,7 @@ body::before {
 }
 
 .avatar {
+  margin-top: 20px;
   width: 78px;
   height: 78px;
   border-radius: 50%;
@@ -364,8 +377,10 @@ body::before {
   border: none;
   border-radius: 14px;
   background: rgba(28, 33, 42, 0.9);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.38), var(--border-glow);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease;
@@ -377,17 +392,22 @@ body::before {
 }
 
 .hamburger-lines {
-  width: 18px;
+  width: 24px;
   height: 14px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 4px;
+  line-height: 0;
 }
 
 .hamburger-lines span {
   display: block;
   height: 2px;
+  width: 20px; /* ~10:1 ratio with 2px height */
   border-radius: 999px;
-  background: #f4f7ff;
+  background: #f6f8ff;
 }
 
 .chat-title {
@@ -527,10 +547,19 @@ body::before {
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: linear-gradient(145deg, #1f2630, #111721);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  padding: 0;
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.send-btn svg {
+  display: block;
+  width: 18px;
+  height: 18px;
 }
 
 .send-btn:active {

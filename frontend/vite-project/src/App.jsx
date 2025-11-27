@@ -36,7 +36,7 @@ const historySeed = {
 };
 
 const BackIcon = () => (
-  <svg width={14} height={14} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <svg width={24} height={24} viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <path d="M14.5 6l-5 6 5 6" stroke="#f5f7fb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
@@ -338,7 +338,7 @@ const CarouselPage = ({ gurus, onGetStarted, selectedNames, onToggle }) => (
         <p style={{ whiteSpace: 'pre-line' }}>Start chatting with masters now. Stop guessing. {'\n'} Let the masters debate.</p>
       </section>
       <Carousel gurus={gurus} selectedNames={selectedNames} onToggle={onToggle} />
-      <p className="footer-hint">Swipe or tap to pick your guru</p>
+      <p className="footer-hint">Swipe and tap to pick your gurus</p>
     </div>
     <button className="cta" type="button" onClick={onGetStarted}>
       Get Started
@@ -561,7 +561,7 @@ const ChatPage = ({ onBack, sessionId, userId, selectedCharacters }) => {
           />
           <ModeToggle mode={mode} onToggle={toggleMode} />
           <button className="send-btn" type="button" aria-label="Send" onClick={handleSend}>
-            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <svg width={18} height={18} viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M5 12h9" stroke="#7a7a7a" strokeWidth="2" strokeLinecap="round" />
               <path d="M12 5l7 7-7 7" stroke="#7a7a7a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>

@@ -39,7 +39,7 @@ const historySeed = {
 const BackIcon = () =>
   React.createElement(
     "svg",
-    { width: 14, height: 14, viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
+    { width: 24, height: 24, viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
     React.createElement("path", {
       d: "M14.5 6l-5 6 5 6",
       stroke: "#f5f7fb",
@@ -581,7 +581,7 @@ const ChatPage = ({ onBack }) => {
           { className: "send-btn", type: "button", "aria-label": "Send", onClick: handleSend },
           React.createElement(
             "svg",
-            { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
+            { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
             React.createElement("path", {
               d: "M5 12h9",
               stroke: "#7a7a7a",
