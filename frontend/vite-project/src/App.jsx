@@ -3,15 +3,21 @@ import './App.css';
 
 import { sdk } from '@farcaster/miniapp-sdk';
 
-const gurus = [
-  { name: 'Elon Musk' },
-  { name: 'Nakamoto' },
-  { name: 'Buffett' },
-  { name: 'Ralo' },
-  { name: 'Socrates' },
-  { name: 'Hypatia' },
-  { name: 'Keller' },
-];
+// API Base URL
+const API_BASE_URL = 'https://guruchat-backend.onrender.com';
+
+// User ID 관리 유틸리티
+const getUserId = () => {
+  let userId = localStorage.getItem('guruchat_user_id');
+  if (!userId) {
+    // UUID v4 생성 (간단한 랜덤 ID)
+    userId = 'user_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    localStorage.setItem('guruchat_user_id', userId);
+  }
+  return userId;
+};
+
+// gurus는 이제 App 컴포넌트 state로 관리됨
 
 const initialMessages = [
   { id: 'm1', author: 'Nakamoto', role: 'opponent', text: 'Trust no one. Verify the code.' },
@@ -71,18 +77,29 @@ const Person = ({ name, active, onToggle }) => (
   </div>
 );
 
-const Carousel = ({ selectedNames, onToggle }) => {
-  const items = useMemo(() => gurus, []);
+const Carousel = ({ gurus, selectedNames, onToggle }) => {
+  if (!gurus || gurus.length === 0) {
+    return (
+      <section className="carousel-shell" aria-label="Masters carousel">
+        <div className="carousel-window">
+          <div className="carousel-track" role="list">
+            <p>Loading characters...</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+  
   return (
     <section className="carousel-shell" aria-label="Masters carousel">
       <div className="carousel-window">
         <div className="carousel-track" role="list">
-          {items.map((person, idx) => (
+          {gurus.map((person, idx) => (
             <Person
-              key={`${person.name}-${idx}`}
-              {...person}
-              active={selectedNames.has(person.name)}
-              onToggle={onToggle}
+              key={person.id || `${person.name}-${idx}`}
+              name={person.name}
+              active={selectedNames.has(person.id || person.name)}
+              onToggle={() => onToggle(person.id || person.name)}
             />
           ))}
         </div>
@@ -224,7 +241,7 @@ const HistoryOverlay = ({ open, onClose, itemsByDay, onDelete }) => (
   </div>
 );
 
-const CarouselPage = ({ onGetStarted, selectedNames, onToggle }) => (
+const CarouselPage = ({ gurus, onGetStarted, selectedNames, onToggle }) => (
   <main className="phone welcome-page">
     <button className="back-btn" aria-label="Go back" type="button">
       <BackIcon />
@@ -237,7 +254,7 @@ const CarouselPage = ({ onGetStarted, selectedNames, onToggle }) => (
         </h1>
         <p style={{ whiteSpace: 'pre-line' }}>Start chatting with masters now. Stop guessing. {'\n'} Let the masters debate.</p>
       </section>
-      <Carousel selectedNames={selectedNames} onToggle={onToggle} />
+      <Carousel gurus={gurus} selectedNames={selectedNames} onToggle={onToggle} />
       <p className="footer-hint">Swipe or tap to pick your guru</p>
     </div>
     <button className="cta" type="button" onClick={onGetStarted}>
@@ -369,12 +386,44 @@ const ChatPage = ({ onBack }) => {
 };
 
 const App = () => {
-    useEffect(() => {
-        sdk.actions.ready();
-    }, []);
-
+  const [userId, setUserId] = useState(null);
+  const [gurus, setGurus] = useState([]);
   const [selectedNames, setSelectedNames] = useState(() => new Set());
   const [view, setView] = useState('welcome');
+  const [sessionId, setSessionId] = useState(null);
+
+  useEffect(() => {
+    sdk.actions.ready();
+    // User ID 초기화
+    const id = getUserId();
+    setUserId(id);
+    console.log('🔑 User ID:', id);
+
+    // 캐릭터 목록 가져오기
+    const fetchCharacters = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/characters/`, {
+          method: 'GET',
+          headers: {
+            'accept': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch characters');
+        }
+        
+        const data = await response.json();
+        console.log('📚 Characters loaded:', data);
+        setGurus(data);
+      } catch (error) {
+        console.error('❌ Error fetching characters:', error);
+        // 폴백으로 빈 배열 유지
+      }
+    };
+
+    fetchCharacters();
+  }, []);
 
   const handleToggle = useCallback((name) => {
     setSelectedNames((prev) => {
@@ -396,7 +445,7 @@ const App = () => {
     );
   }
 
-  return <CarouselPage onGetStarted={() => setView('chat')} selectedNames={selectedNames} onToggle={handleToggle} />;
+  return <CarouselPage gurus={gurus} onGetStarted={() => setView('chat')} selectedNames={selectedNames} onToggle={handleToggle} />;
 };
 
 export default App;
