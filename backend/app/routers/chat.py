@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List
 import json
 import asyncio
-import random
 from .. import crud, schemas, database, models
+from ..utils.llm_chat import generate_guru_response
 
 
 router = APIRouter(prefix="/api/sessions/chat", tags=["chat"])
@@ -38,21 +38,77 @@ async def generate_chat_stream(db: Session, session_id: str,
     style = request.style  # 'spicy' or 'cold'
     model = request.model
 
+    loop = asyncio.get_running_loop()
+    llm_mode = "hot" if isinstance(style, str) and style.lower() == "spicy" else "cold"
+
     for character in characters:
-        #################### TODO ####################
-        mock_response = f"나는 {character.name}입니다. 당신의 메세지 {user_message}에 답변합니다."
+        persona_data = character.persona_data or {}
+        if isinstance(persona_data, dict):
+            character_profile = dict(persona_data)
+        else:
+            try:
+                character_profile = json.loads(persona_data)
+            except (TypeError, json.JSONDecodeError):
+                character_profile = {"persona": persona_data}
 
-        for token in mock_response:
-            await asyncio.sleep(0.05)
+        character_profile.setdefault("name", character.name)
+        character_profile.setdefault("description", character.description)
+        character_profile.setdefault("id", character.id)
 
+        queue: asyncio.Queue = asyncio.Queue()
+        streamed_chunks = []
+
+        def enqueue_chunk(text: str):
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, text)
+            except RuntimeError:
+                pass
+
+        def finish_stream():
+            try:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+            except RuntimeError:
+                pass
+
+        def llm_worker():
+            return generate_guru_response(
+                user_message,
+                llm_mode,
+                character_profile,
+                stream_callback=enqueue_chunk,
+                stream_end_callback=finish_stream
+            )
+
+        response_future = loop.run_in_executor(None, llm_worker)
+
+        while True:
+            chunk_text = await queue.get()
+            if chunk_text is None:
+                break
+            streamed_chunks.append(chunk_text)
             chunk = {
                 "character_id": character.id,
                 "name": character.name,
-                "content": token
+                "content": chunk_text
             }
-            # SSE format: "data: <json>\n\n"
             yield f"data: {json.dumps(chunk)}\n\n"
-        #################### TODO ####################
+
+        try:
+            assistant_response = await response_future
+        except HTTPException:
+            raise
+        except Exception as exc:
+            assistant_response = f"System Error: {exc}"
+
+        assistant_response = assistant_response or ""
+
+        if not streamed_chunks:
+            chunk = {
+                "character_id": character.id,
+                "name": character.name,
+                "content": assistant_response
+            }
+            yield f"data: {json.dumps(chunk)}\n\n"
 
         # Send a space to indicate the end of message for this character
         yield f"data: {json.dumps({'content': ' '})}\n\n"
@@ -61,7 +117,7 @@ async def generate_chat_stream(db: Session, session_id: str,
             crud.create_message(
                 db,
                 session_id=session_id,
-                content=mock_response,
+                content=assistant_response,
                 role="assistant",
                 character_id=character.id
             )

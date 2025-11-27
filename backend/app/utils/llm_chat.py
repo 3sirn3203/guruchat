@@ -1,8 +1,9 @@
 import os
 import json
 import requests
-import time
+from fastapi import HTTPException
 from dotenv import load_dotenv
+from typing import Callable, Optional
 
 # 1. 환경 변수 및 설정 로드
 load_dotenv()
@@ -10,7 +11,7 @@ load_dotenv()
 FLOCK_API_KEY = os.getenv("FLOCK_API_KEY")
 SERPER_API_KEY = os.getenv("SERPER_API_KEY")
 FLOCK_BASE_URL = "https://api.flock.io/v1"
-MODEL_ID = "qwen3-235b-a22b-instruct-2507" 
+MODEL_ID = "qwen3-235b-a22b-instruct-2507"
 
 # ==========================================    
 # [Part 1] 뉴스 검색 및 처리 도구 (Tools)
@@ -66,7 +67,27 @@ def get_formatted_news(user_question):
 # [Part 2] 핵심 엔진 (The Guru Engine)
 # ==========================================
 
-def generate_guru_response(user_query, mode, character_profile):
+def _parse_stream_chunk(chunk_obj):
+    """Extract textual content from a streaming chunk."""
+    if not chunk_obj:
+        return ""
+    content = chunk_obj.get("content")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts = []
+        for item in content:
+            if isinstance(item, dict):
+                texts.append(item.get("text", ""))
+            else:
+                texts.append(str(item))
+        return "".join(texts)
+    return ""
+
+
+def generate_guru_response(user_query, mode, character_profile,
+                           stream_callback: Optional[Callable[[str], None]] = None,
+                           stream_end_callback: Optional[Callable[[], None]] = None):
     """
     [범용 함수] 어떤 캐릭터든 프로필만 넣으면 그 사람처럼 연기함.
     
@@ -138,15 +159,84 @@ def generate_guru_response(user_query, mode, character_profile):
     }
     
     print(f"   💬 [Engine] {character_profile['name']} ({mode.upper()}) 답변 생성 중...")
-    
+
+    if stream_callback:
+        payload["stream"] = True
+        collected_chunks = []
+        response = None
+        try:
+            response = requests.post(url, headers=headers, json=payload, stream=True)
+            response.raise_for_status()
+
+            for raw_line in response.iter_lines(decode_unicode=True):
+                if not raw_line:
+                    continue
+                data_line = raw_line
+                if data_line.startswith("data:"):
+                    data_line = data_line[len("data:"):].strip()
+                else:
+                    data_line = data_line.strip()
+
+                if not data_line:
+                    continue
+                if data_line == "[DONE]":
+                    break
+
+                try:
+                    event = json.loads(data_line)
+                except json.JSONDecodeError:
+                    continue
+
+                choices = event.get("choices")
+                if not choices:
+                    continue
+
+                delta = choices[0].get("delta", {})
+                text_chunk = _parse_stream_chunk(delta)
+                if not text_chunk:
+                    continue
+
+                collected_chunks.append(text_chunk)
+                try:
+                    stream_callback(text_chunk)
+                except Exception:
+                    pass
+
+            return "".join(collected_chunks)
+        except requests.HTTPError as err:
+            status_code = err.response.status_code if err.response is not None else 502
+            raise HTTPException(
+                status_code=status_code,
+                detail=f"LLM streaming HTTP error: {err}"
+            ) from err
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"LLM streaming error: {e}") from e
+        finally:
+            if response is not None:
+                response.close()
+            if stream_end_callback:
+                try:
+                    stream_end_callback()
+                except Exception:
+                    pass
+
     try:
         response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status()
         data = response.json()
 
         if 'choices' not in data:
-            return f"❌ API Error: {json.dumps(data, ensure_ascii=False)}"
+            raise HTTPException(
+                status_code=502,
+                detail=f"LLM API error: {json.dumps(data, ensure_ascii=False)}"
+            )
 
         return data['choices'][0]['message']['content']
+    except requests.HTTPError as err:
+        status_code = err.response.status_code if err.response is not None else 502
+        raise HTTPException(
+            status_code=status_code,
+            detail=f"LLM HTTP error: {err}"
+        ) from err
     except Exception as e:
-        return f"System Error: {e}"
-
+        raise HTTPException(status_code=500, detail=f"LLM error: {e}") from e
